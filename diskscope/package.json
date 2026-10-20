@@ -1,0 +1,66 @@
+{
+  "name": "diskscope",
+  "version": "1.0.0",
+  "description": "目录体积 + 时间轴清理器",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "selftest": "electron . --selftest",
+    "uitest": "electron . --uitest",
+    "check:rules": "node tools/check_rules.js",
+    "gen:rules": "python tools/gen_rules.py",
+    "bench": "electron . --bench"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.diskscope.app",
+    "productName": "DiskScope",
+    "copyright": "DiskScope",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "extraMetadata": {
+      "description": "目录体积 + 时间轴清理器"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DiskScope",
+      "artifactName": "DiskScope-${version}-安装程序.${ext}"
+    },
+    "portable": {
+      "artifactName": "DiskScope-${version}-绿色版.${ext}"
+    },
+    "compression": "maximum",
+    "asar": true,
+    "removePackageScripts": true
+  }
+}

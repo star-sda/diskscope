@@ -1,0 +1,9 @@
+node_modules/
+dist/
+tools/shots/
+__pycache__/
+*.pyc
+
+# IDE 配置 (包含本机特定的 workspace.xml 等)
+.idea/
+.vscode/

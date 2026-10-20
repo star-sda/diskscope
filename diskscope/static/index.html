@@ -1,0 +1,221 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="ds-token" content="__TOKEN__">
+<title>DiskScope — 目录体积 + 时间轴清理器</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="dot"></span>DiskScope</div>
+  <div class="scanrow">
+    <input id="path" spellcheck="false" placeholder="要扫描的目录, 例如 D:\projects">
+    <button id="browse" class="ghost" title="浏览目录">浏览…</button>
+    <label class="field"><span>深度</span>
+      <select id="depth">
+        <option value="6">6 层</option>
+        <option value="10">10 层</option>
+        <option value="12" selected>12 层</option>
+        <option value="18">18 层</option>
+      </select>
+    </label>
+    <label class="field grow"><span>排除</span>
+      <input id="exclude" spellcheck="false" placeholder="逗号分隔, 例如 node_modules,.git">
+    </label>
+    <button id="scan" class="primary">扫描</button>
+    <button id="cancel" class="warn" hidden>停止</button>
+  </div>
+</header>
+
+<section id="drives" class="drives"></section>
+
+<div id="progress" class="progress" hidden>
+  <div class="bar"><i id="progressFill"></i></div>
+  <div class="ptext"><span id="progressText">准备扫描…</span><span id="progressMeta"></span></div>
+</div>
+
+<div id="banner" class="banner" hidden></div>
+
+<nav class="tabs">
+  <button data-tab="size" class="active">体积分布</button>
+  <button data-tab="time">时间轴</button>
+  <button data-tab="clean">清理 <span id="junkBadge" class="badge"></span></button>
+  <button data-tab="big">大文件 <span id="bigBadge" class="badge"></span></button>
+</nav>
+
+<main>
+  <!-- ================= 体积 ================= -->
+  <section id="tab-size" class="tab active">
+    <div id="sizeSummary" class="summary"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>占用地图</h3>
+        <div id="crumb" class="crumb"></div>
+        <button id="tmUp" class="ghost small">上一层</button>
+      </div>
+      <div id="treemap" class="treemap"><div class="placeholder">还没有数据, 先扫描一个目录</div></div>
+      <div class="legend">
+        <span><i class="sw safe"></i>可重建 (safe)</span>
+        <span><i class="sw caution"></i>需确认 (caution)</span>
+        <span><i class="sw never"></i>请勿删除 (never)</span>
+        <span><i class="sw normal"></i>普通目录</span>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>目录明细</h3>
+        <label class="chk"><input type="checkbox" id="showCold"> 只看最近 30 天有改动的</label>
+      </div>
+      <div id="tree" class="tree"><div class="placeholder">还没有数据</div></div>
+    </div>
+  </section>
+
+  <!-- ================= 时间轴 ================= -->
+  <section id="tab-time" class="tab">
+    <div id="timeSummary" class="summary"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>最近 30 天, 每天写入了多少数据</h3>
+        <div id="timeCrumb" class="crumb"></div>
+        <select id="timeRange" class="small">
+          <option value="7">最近 7 天</option>
+          <option value="14">最近 14 天</option>
+          <option value="30" selected>最近 30 天</option>
+        </select>
+      </div>
+      <div id="chart" class="chart"></div>
+      <div id="chartLegend" class="legend"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>谁在悄悄长大</h3>
+        <span class="hint">按最近 7 天写入量排序, 点一行可以下钻</span>
+      </div>
+      <div id="growth" class="growth"><div class="placeholder">还没有数据</div></div>
+    </div>
+  </section>
+
+  <!-- ================= 清理 ================= -->
+  <section id="tab-clean" class="tab">
+    <div id="cleanSummary" class="summary"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>可清理项</h3>
+        <div class="filters">
+          <label class="chk"><input type="checkbox" id="onlySafe" checked> 只看可重建的</label>
+          <label class="chk"><input type="checkbox" id="onlyCold"> 30 天未改动</label>
+          <input id="junkSearch" class="small search" placeholder="搜索路径…">
+        </div>
+      </div>
+      <div class="tablewrap">
+        <table class="junk">
+          <thead><tr>
+            <th class="c1"><input type="checkbox" id="checkAll"></th>
+            <th>类型</th><th class="num">占用</th><th>位置</th><th>说明</th><th class="num">最后改动</th>
+          </tr></thead>
+          <tbody id="junkBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 大文件 ================= -->
+  <section id="tab-big" class="tab">
+    <div id="bigSummary" class="summary"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>文件类型分布</h3>
+        <span class="hint">点一行可以只看这个类型</span>
+      </div>
+      <div id="extList" class="extlist"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>最大的文件</h3>
+        <div class="filters">
+          <select id="minSize">
+            <option value="0">全部大小</option>
+            <option value="1048576">大于 1 MB</option>
+            <option value="10485760">大于 10 MB</option>
+            <option value="104857600">大于 100 MB</option>
+          </select>
+          <label class="chk"><input type="checkbox" id="bigCold"> 30 天未改动</label>
+          <input id="bigSearch" class="small search" placeholder="搜索路径…">
+        </div>
+      </div>
+      <div class="tablewrap">
+        <table class="junk">
+          <thead><tr>
+            <th class="c1"><input type="checkbox" id="bigCheckAll"></th>
+            <th class="num">大小</th><th>类型</th><th>位置</th>
+            <th class="num">最后改动</th>
+          </tr></thead>
+          <tbody id="bigBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer id="cleanbar" class="cleanbar" hidden>
+  <div class="left">
+    已选 <b id="selCount">0</b> 项 · 可释放 <b id="selSize" class="good">0 B</b>
+    <span id="selNote" class="hint"></span>
+    <span id="selSlimHint" class="hint" hidden>· 已勾选好了, 切回对应页面执行</span>
+  </div>
+  <div class="right">
+    <select id="cleanMode">
+      <option value="recycle">移到回收站 (可还原)</option>
+      <option value="quarantine">移入隔离区 (不删)</option>
+      <option value="permanent">永久删除 (不可恢复)</option>
+    </select>
+    <button id="previewBtn" class="ghost">预览</button>
+    <button id="doClean" class="danger">执行清理</button>
+    <button id="gotoClean" class="ghost" hidden>去清理 →</button>
+  </div>
+</footer>
+
+<!-- 目录浏览器 -->
+<div id="browseModal" class="modal" hidden>
+  <div class="box">
+    <h3>选择目录</h3>
+    <div id="browsePath" class="browsepath"></div>
+    <div id="browseList" class="browselist"></div>
+    <div class="modal-foot">
+      <button id="browseUp" class="ghost">上一层</button>
+      <div class="spacer"></div>
+      <button id="browseCancel" class="ghost">取消</button>
+      <button id="browseOk" class="primary">就用这个</button>
+    </div>
+  </div>
+</div>
+
+<!-- 确认框 -->
+<div id="confirmModal" class="modal" hidden>
+  <div class="box">
+    <h3 id="cfTitle">确认</h3>
+    <div id="cfBody" class="cfbody"></div>
+    <div class="modal-foot">
+      <div class="spacer"></div>
+      <button id="cfCancel" class="ghost">取消</button>
+      <button id="cfOk" class="danger">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- 执行结果 -->
+<div id="resultModal" class="modal" hidden>
+  <div class="box">
+    <h3>执行结果</h3>
+    <pre id="rsBody" class="rsbody"></pre>
+    <div class="modal-foot"><div class="spacer"></div><button id="rsOk" class="primary">知道了</button></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
