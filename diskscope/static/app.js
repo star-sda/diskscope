@@ -609,6 +609,7 @@ function revealPath(p) {
   if (!p) return;
   api('/api/reveal', { path: p }).then((r) => {
     if (r && r.ok === false) toast('无法定位: ' + (r.error || '未知错误'), 'bad');
+    else if (r && r.moved) toast('文件已被移动, 已定位到新位置', 'good');
     else if (r && r.fallback) toast('目标已不存在, 已改打开它原先所在的目录', 'good');
   }).catch((e) => toast('无法打开资源管理器: ' + (e && e.message ? e.message : e), 'bad'));
 }

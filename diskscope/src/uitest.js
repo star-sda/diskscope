@@ -351,6 +351,23 @@ async function runUiTest(createWindow) {
     await sleep(2500);
     w = windows();
     check(!!w.find((x) => /docs/i.test(x)), "(b) 页面的 revealPath 真的能打开资源管理器", JSON.stringify(w));
+    // (c2) 文件被移到了隔壁去 (模拟 Steam 重新下载素材换了目录 ID)
+    {
+      const base = path.join(tmp, "movedcase");
+      const oldDir = path.join(base, "oldid");
+      const newDir = path.join(base, "newid");
+      fs.mkdirSync(oldDir, { recursive: true });
+      fs.writeFileSync(path.join(oldDir, "asset.bin"), Buffer.alloc(1024));
+      const oldPath = path.join(oldDir, "asset.bin");
+      fs.rmSync(oldDir, { recursive: true, force: true });   // 旧目录被清理
+      fs.mkdirSync(newDir, { recursive: true });
+      fs.writeFileSync(path.join(newDir, "asset.bin"), Buffer.alloc(1024));
+      const res4 = await js("window.api.reveal(" + JSON.stringify(oldPath) + ")");
+      check(res4 && res4.ok === true && !!res4.moved,
+            "文件被移到隔壁后能自动找回来",
+            res4 && res4.moved ? res4.moved.slice(-34) : JSON.stringify(res4));
+    }
+
     // (c) 目标已被删除 -> 应该降级到上级目录, 而不是静默无反应
     const gone = path.join(tmp, "不存在的目录", "也没有这个文件.bin");
     const res3 = await js("window.api.reveal(" + JSON.stringify(gone) + ")");

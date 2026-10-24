@@ -115,6 +115,42 @@ async function listDrives() {
 /* ------------------------------------------------------------------ *
  * IPC
  * ------------------------------------------------------------------ */
+/**
+ * 目标不在了, 试试是不是"被挪到隔壁去了"。
+ *
+ * 场景: Steam 重新下载 workshop 素材时会换一个新的目录 ID (文件名不变),
+ * 所以扫描时记下来的路径会失效。这时候文件往往就在上一级目录的其他子目录里。
+ *
+ * 只向上找一层到最近存在的祖先目录, 再在它的直接子目录里按文件名找一遍 (有上限, 不会扫全盘) 。
+ */
+function nearestExistingDir(p) {
+  let dir = path.dirname(p);
+  for (let i = 0; i < 40; i++) {
+    if (!dir) return null;
+    try { if (fs.statSync(dir).isDirectory()) return dir; } catch { /* 继续向上找 */ }
+    const up = path.dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
+  return null;
+}
+
+function findMovedFile(p) {
+  const base = nearestExistingDir(p);
+  if (!base) return null;
+  const name = path.basename(p);
+  let entries = [];
+  try { entries = fs.readdirSync(base, { withFileTypes: true }); } catch { return null; }
+  let checked = 0;
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    if (++checked > 500) break;                    // 防止迷循大目录
+    const cand = path.join(base, e.name, name);
+    try { if (fs.existsSync(cand)) return cand; } catch { /* 忽略 */ }
+  }
+  return null;
+}
+
 function registerIpc() {
   ipcMain.handle("drives", async () => ({ drives: await listDrives() }));
 
@@ -175,16 +211,19 @@ function registerIpc() {
         return { ok: false, error: `${ex.name}: ${ex.message}` };
       }
     }
-    // 目标已不存在: 扫描结果是旧的, 之后文件被移动/删除/游戏清理了。
-    // 不能默默无反应, 而是退而打开最近还存在的上级目录, 让用户看到它原先在哪。
-    let dir = path.dirname(p);
-    for (let i = 0; i < 40; i++) {
-      if (!dir || fs.existsSync(dir)) break;
-      const up = path.dirname(dir);
-      if (up === dir) break;
-      dir = up;
+    // 目标已不存在: 扫描结果是旧的, 之后文件被移动/删除/游戏重新下载了。
+    // 优先尝试"把下面被挪到的目录" 找回来, 找不到再退而打开上级目录。
+    const moved = findMovedFile(p);
+    if (moved) {
+      try {
+        shell.showItemInFolder(moved);
+        return { ok: true, moved, error: "文件已被移动, 已定位到新位置" };
+      } catch (ex) {
+        return { ok: false, error: `${ex.name}: ${ex.message}` };
+      }
     }
-    if (dir && fs.existsSync(dir)) {
+    const dir = nearestExistingDir(p);
+    if (dir) {
       try {
         const err = await shell.openPath(dir);
         if (err) return { ok: false, error: err };

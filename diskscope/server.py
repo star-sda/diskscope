@@ -119,6 +119,54 @@ def start_scan(root, max_depth, excludes):
 # --------------------------------------------------------------------------
 # 删除前的安全闸门
 # --------------------------------------------------------------------------
+def nearest_existing_dir(p):
+    """向上找最近还存在的目录。"""
+    d = os.path.dirname(p)
+    for _ in range(40):
+        if not d:
+            return None
+        try:
+            if os.path.isdir(d):
+                return d
+        except OSError:
+            pass
+        up = os.path.dirname(d)
+        if up == d:
+            return None
+        d = up
+    return None
+
+
+def find_moved_file(p):
+    """目标不在了, 试试是不是"被挪到隔壁去了"。
+
+    Steam 重新下载 workshop 素材时会换一个新的目录 ID (文件名不变),
+    所以扫描时记下来的路径会失效。这时候文件往往就在上一级目录的其他子目录里。
+    """
+    base = nearest_existing_dir(p)
+    if not base:
+        return None
+    name = os.path.basename(p)
+    try:
+        entries = list(os.scandir(base))
+    except OSError:
+        return None
+    checked = 0
+    for e in entries:
+        try:
+            if not e.is_dir():
+                continue
+        except OSError:
+            continue
+        checked += 1
+        if checked > 500:            # 防止迷循大目录
+            break
+        cand = os.path.join(base, e.name, name)
+        if os.path.exists(cand):
+            return cand
+    return None
+
+
 def guard_paths(paths):
     """最后一道闸门。返回 (safe_paths, rejected)。
 
@@ -268,15 +316,19 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, {"ok": True})
                 except Exception as ex:
                     return self._send(200, {"ok": False, "error": str(ex)})
-            # 目标已不存在 (扫描结果是旧的), 退而打开最近还存在的上级目录
-            d = os.path.dirname(target)
-            for _ in range(40):
-                if not d or os.path.exists(d):
-                    break
-                up = os.path.dirname(d)
-                if up == d:
-                    break
-                d = up
+            # 目标已不存在 (扫描结果是旧的): 先尝试把"被挪到隔壁去了"的目录找回来
+            moved = find_moved_file(target)
+            if moved:
+                try:
+                    if os.name == "nt":
+                        subprocess.Popen('explorer /select,"%s"' % moved.replace('"', ""))
+                    else:
+                        subprocess.Popen(["xdg-open", os.path.dirname(moved)])
+                    return self._send(200, {"ok": True, "moved": moved,
+                                            "error": "文件已被移动, 已定位到新位置"})
+                except Exception as ex:
+                    return self._send(200, {"ok": False, "error": str(ex)})
+            d = nearest_existing_dir(target)
             if d and os.path.exists(d):
                 try:
                     if os.name == "nt":
