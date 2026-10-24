@@ -607,7 +607,10 @@ function renderBig() {
    清理页 / 大文件页都显示了文件位置, 能点就应该能直接打开它。 */
 function revealPath(p) {
   if (!p) return;
-  api('/api/reveal', { path: p }).catch(() => toast('无法打开资源管理器', 'bad'));
+  api('/api/reveal', { path: p }).then((r) => {
+    if (r && r.ok === false) toast('无法定位: ' + (r.error || '未知错误'), 'bad');
+    else if (r && r.fallback) toast('目标已不存在, 已改打开它原先所在的目录', 'good');
+  }).catch((e) => toast('无法打开资源管理器: ' + (e && e.message ? e.message : e), 'bad'));
 }
 
 /* ---------------- 清理 ---------------- */

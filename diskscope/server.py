@@ -252,7 +252,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/reveal":
             # 在资源管理器中定位: 打开所在目录并选中该项
             target = (b.get("path") or "").strip().strip('"')
-            if target and os.path.exists(target):
+            if not target:
+                return self._send(200, {"ok": False, "error": "路径为空"})
+            if os.path.exists(target):
                 try:
                     if os.name == "nt":
                         # explorer 的 /select,后面必须带引号, 且要用字符串形式传入
@@ -263,9 +265,29 @@ class Handler(BaseHTTPRequestHandler):
                         subprocess.Popen('explorer /select,"%s"' % safe)
                     else:
                         subprocess.Popen(["xdg-open", os.path.dirname(target) or target])
-                except Exception:
-                    pass
-            return self._send(200, {"ok": True})
+                    return self._send(200, {"ok": True})
+                except Exception as ex:
+                    return self._send(200, {"ok": False, "error": str(ex)})
+            # 目标已不存在 (扫描结果是旧的), 退而打开最近还存在的上级目录
+            d = os.path.dirname(target)
+            for _ in range(40):
+                if not d or os.path.exists(d):
+                    break
+                up = os.path.dirname(d)
+                if up == d:
+                    break
+                d = up
+            if d and os.path.exists(d):
+                try:
+                    if os.name == "nt":
+                        os.startfile(d)
+                    else:
+                        subprocess.Popen(["xdg-open", d])
+                    return self._send(200, {"ok": True, "fallback": d,
+                                            "error": "目标已不存在, 已打开所在目录"})
+                except Exception as ex:
+                    return self._send(200, {"ok": False, "error": str(ex)})
+            return self._send(200, {"ok": False, "error": "路径不存在, 也没有找到可用的上级目录"})
 
         if path == "/api/clean/dryrun":
             safe, rejected = guard_paths(b.get("paths") or [])

@@ -292,7 +292,9 @@ async function runUiTest(createWindow) {
   console.log("\n[6.5] 路径定位");
   {
     // 自动化测试里不能真开资源管理器, 用桩函数接住
-    await js("window.__revealed = []; window.revealPath = (p) => { window.__revealed.push(p); };");
+    // 先保存真实的 revealPath, 测完要恢复 —— 否则后面测的都是桩函数, 会掩盖真实问题
+    await js("window.__origReveal = window.revealPath; " +
+             "window.__revealed = []; window.revealPath = (p) => { window.__revealed.push(p); };");
 
     const links = await js("document.querySelectorAll('#bigBody .jpath-link').length");
     check(links > 0, "大文件页的路径是可点的", `${links} 个`);
@@ -311,6 +313,54 @@ async function runUiTest(createWindow) {
     await sleep(250);
     const got2 = await js("(window.__revealed||[])[1] || ''");
     check(!!got2, "清理页点路径也会调用定位", got2.slice(-46));
+
+    // 恢复真实函数 —— 下面要测真实链路
+    await js("window.revealPath = window.__origReveal;");
+  }
+
+  // --- 真实定位链路: 不打桩, 从渲染进程一路到资源管理器 ---
+  console.log("\n[6.6] 真实定位链路");
+  {
+    const { execFileSync } = require("child_process");
+    const ps = (body) => execFileSync("powershell", ["-NoProfile", "-Command", body],
+                                      { encoding: "utf8", timeout: 30000 });
+    const windows = () => ps("$sh = New-Object -ComObject Shell.Application; " +
+      "$sh.Windows() | ForEach-Object { try { $_.LocationURL } catch { '' } }")
+      .split("\n").map((x) => x.trim()).filter(Boolean);
+    const closeAll = () => {
+      try {
+        ps("$sh = New-Object -ComObject Shell.Application; " +
+           "$sh.Windows() | ForEach-Object { try { $_.Quit() } catch {} }");
+      } catch { /* 忽略 */ }
+    };
+
+    closeAll();
+    const target = path.join(tmp, "docs", "f0.bin");
+
+    // (a) 直接调用 IPC
+    const res = await js("window.api.reveal(" + JSON.stringify(target) + ")");
+    check(res && res.ok === true, "直接调用定位接口返回成功", JSON.stringify(res));
+    await sleep(2500);
+    let w = windows();
+    check(!!w.find((x) => /docs/i.test(x)), "(a) 资源管理器打开了目标目录", JSON.stringify(w));
+    closeAll();
+    await sleep(800);
+
+    // (b) 调用页面上真实的 revealPath (这个中间层之前从未被测过)
+    await js("window.revealPath(" + JSON.stringify(target) + ")");
+    await sleep(2500);
+    w = windows();
+    check(!!w.find((x) => /docs/i.test(x)), "(b) 页面的 revealPath 真的能打开资源管理器", JSON.stringify(w));
+    // (c) 目标已被删除 -> 应该降级到上级目录, 而不是静默无反应
+    const gone = path.join(tmp, "不存在的目录", "也没有这个文件.bin");
+    const res3 = await js("window.api.reveal(" + JSON.stringify(gone) + ")");
+    check(res3 && res3.ok === true && !!res3.fallback,
+          "目标已删除时降级到上级目录 (而不是无反应)", JSON.stringify(res3));
+    await sleep(2000);
+    w = windows();
+    check(!!w.find((x) => /diskscope_ui/i.test(x)), "降级后仍然打开了可用的目录", JSON.stringify(w));
+
+    closeAll();
   }
 
   // --- dry-run 预演 ---

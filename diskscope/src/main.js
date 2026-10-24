@@ -166,8 +166,34 @@ function registerIpc() {
   });
 
   ipcMain.handle("reveal", async (_e, p) => {
-    if (p && fs.existsSync(p)) shell.showItemInFolder(p);
-    return { ok: true };
+    if (!p) return { ok: false, error: "路径为空" };
+    if (fs.existsSync(p)) {
+      try {
+        shell.showItemInFolder(p);
+        return { ok: true };
+      } catch (ex) {
+        return { ok: false, error: `${ex.name}: ${ex.message}` };
+      }
+    }
+    // 目标已不存在: 扫描结果是旧的, 之后文件被移动/删除/游戏清理了。
+    // 不能默默无反应, 而是退而打开最近还存在的上级目录, 让用户看到它原先在哪。
+    let dir = path.dirname(p);
+    for (let i = 0; i < 40; i++) {
+      if (!dir || fs.existsSync(dir)) break;
+      const up = path.dirname(dir);
+      if (up === dir) break;
+      dir = up;
+    }
+    if (dir && fs.existsSync(dir)) {
+      try {
+        const err = await shell.openPath(dir);
+        if (err) return { ok: false, error: err };
+        return { ok: true, fallback: dir, error: "目标已不存在, 已打开所在目录" };
+      } catch (ex) {
+        return { ok: false, error: `${ex.name}: ${ex.message}` };
+      }
+    }
+    return { ok: false, error: "路径不存在, 也没有找到可用的上级目录" };
   });
 
 }
