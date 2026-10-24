@@ -372,11 +372,34 @@ function renderTree() {
   });
 }
 
+/* ---------------- 图表悬停提示 ----------------
+   用单个复用的 DOM 节点, 不再每次 hover 都新建一个跟在 body 上。
+   之前的写法有个漏洞: 提示框存在 rect 元素上, 而一旦点击柱子导致图表重建,
+   旧 rect 就被丢弃了, mouseleave 永远不会触发 —— 提示框永久停留在页面上。
+   单个复用节点从根上消除这类泄漏。 */
+let _chartTip = null;
+function showChartTip(anchor, text) {
+  if (!_chartTip) {
+    _chartTip = document.createElement('div');
+    _chartTip.className = 'toast chart-tip';
+    document.body.appendChild(_chartTip);
+  }
+  const b = anchor.getBoundingClientRect();
+  _chartTip.textContent = text;
+  _chartTip.style.left = (b.left + b.width / 2) + 'px';
+  _chartTip.style.top = Math.max(4, b.top - 4) + 'px';
+  _chartTip.style.bottom = 'auto';
+  _chartTip.style.transform = 'translateX(-50%)';
+  _chartTip.hidden = false;
+}
+function hideChartTip() { if (_chartTip) _chartTip.hidden = true; }
+
 /* ---------------- 时间轴 ---------------- */
 const PALETTE = ['#4f8cff', '#3ecf8e', '#f0b429', '#f0576a', '#a06bff', '#2fc4c4',
   '#ff8a5b', '#8fd14f', '#ff6fa5', '#5b8def'];
 
 function renderTime() {
+  hideChartTip();                       // 图表要重画, 旧提示一律清掉
   const node = S.timeNode, days = +$('#timeRange').value;
   $('#timeCrumb').innerHTML = crumbHtml(S.timePath);
   bindCrumb('#timeCrumb', (nd, path) => {
@@ -454,17 +477,11 @@ function renderTime() {
       const nd = findNode(S.result.root, r.dataset.p);
       if (nd) { S.timeNode = nd; pushPath(S.timePath, nd); renderTime(); renderGrowth(); }
     };
-    r.onmouseenter = () => {
-      const b = r.getBoundingClientRect();
-      const t = document.createElement('div');
-      t.className = 'toast';
-      t.style.cssText = `left:${b.left + b.width / 2}px;bottom:auto;top:${b.top - 4}px;transform:translateX(-50%)`;
-      t.textContent = `${r.dataset.n} · ${r.dataset.d === 0 ? '今天' : r.dataset.d + '天前'} = ${fmt(+r.dataset.v)}`;
-      document.body.appendChild(t);
-      r._tip = t;
-    };
-    r.onmouseleave = () => { if (r._tip) { r._tip.remove(); r._tip = null; } };
+    r.onmouseenter = () => showChartTip(
+      r, `${r.dataset.n} · ${r.dataset.d === 0 ? '今天' : r.dataset.d + '天前'} = ${fmt(+r.dataset.v)}`);
   });
+  // 移到柱体之间的空白区也要隐藏, 不只是移出柱子时
+  $('#chart').onmouseleave = hideChartTip;
 }
 function niceMax(v) {
   if (v <= 0) return 1;
@@ -670,6 +687,7 @@ function syncCleanbar() {
 }
 
 function switchTab(name) {
+  hideChartTip();
   $$('.tabs button').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
   $$('.tab').forEach(x => x.classList.toggle('active', x.id === 'tab-' + name));
   ACTIVE_TAB = name;

@@ -28,7 +28,7 @@ function resolveShots() {
 }
 const SHOTS = resolveShots();
 
-const LOG = path.join(__dirname, "..", "tools", "shots", "_uitest.log");
+const LOG = path.join(SHOTS, "_uitest.log");   // 跟 SHOTS 走, 打包后 asar 内部不可写
 function logLine(msg) {
   try {
     fs.mkdirSync(path.dirname(LOG), { recursive: true });
@@ -225,6 +225,35 @@ async function runUiTest(createWindow) {
     check((await crumb()) !== beforeLeg, "点图例可以下钻", `${beforeLeg} -> ${await crumb()}`);
   }
   await shot(win, "02-时间轴");
+
+  // 悬停提示: 下钻导致图表重绘后, 提示框必须消失
+  console.log("\n[4.5] 悬停提示");
+  {
+    const tipVisible = () => js(
+      "(() => { const t = document.querySelector('.chart-tip'); return !!t && !t.hidden; })()");
+    await js("document.querySelectorAll('#chart rect')[0]" +
+             ".dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }))");
+    await sleep(250);
+    check((await tipVisible()) === true, "悬停柱子时显示提示框");
+
+    // SVG 元素没有 HTMLElement.click() 方法, 只能派发事件
+    await js("document.querySelectorAll('#chart rect')[0]" +
+             ".dispatchEvent(new MouseEvent('click', { bubbles: true }))");
+    await sleep(400);
+    check((await tipVisible()) === false, "点击下钻导致重绘后, 提示框已消失 (不残留)");
+    const n = await js("document.querySelectorAll('.chart-tip').length");
+    check(n <= 1, "页面上最多只有 1 个提示节点 (无孤儿节点)", String(n));
+
+    // 切换页签也不应请残留
+    await js("document.querySelectorAll('#chart rect')[0]" +
+             ".dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }))");
+    await sleep(200);
+    await js("document.querySelector('.tabs button[data-tab=\"size\"]').click()");
+    await sleep(300);
+    check((await tipVisible()) === false, "切换到其他页签时提示框也会消失");
+    await js("document.querySelector('.tabs button[data-tab=\"time\"]').click()");
+    await sleep(300);
+  }
 
   // --- 清理页 + 底栏策略 ---
   console.log("\n[5] 清理页与底栏显隐策略");
