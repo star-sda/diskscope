@@ -73,6 +73,7 @@ function buildFixture(root) {
   mk(path.join(p, "cpp-app", "Debug"), 20, 30000, 30);
   mk(path.join(p, "live-api", "__pycache__"), 40, 900, 3);
   mk(path.join(p, "live-api", "src"), 30, 6000, 1);
+  mk(path.join(p, "live-api", "src", "core"), 12, 4000, 0);   // 多加一层, 以便测两层下钻
   one(path.join(p, "live-api", "app.log"), 180000, 0);
   mk(path.join(root, "docs"), 40, 12000, 45);
   // \u666e\u901a\u5927\u6587\u4ef6 (\u4e0d\u8d70\u89c4\u5219, \u7528\u4f86\u9a8c\u8bc1\u5927\u6587\u4ef6\u9875)
@@ -179,6 +180,50 @@ async function runUiTest(createWindow) {
   check(bars > 0, "堆叠柱状图渲染出柱子", `${bars} 根`);
   const growth = await js("document.querySelectorAll('#growth .grow').length");
   check(growth > 0, "增长排行榜有内容", `${growth} 行`);
+
+  // 导航: 下钻 -> 上一层 -> 面包屑跳转
+  {
+    const crumb = () => js("document.querySelector('#timeCrumb').textContent.trim()");
+    const links = () => js("document.querySelectorAll('#timeCrumb .crumblink').length");
+    const upDisabled = () => js("document.querySelector('#timeUp').hasAttribute('disabled')");
+
+    const rootCrumb = await crumb();
+    check((await upDisabled()) === true, "在根目录时「上一层」按钮是禁用的");
+    check((await links()) === 0, "在根目录时面包屑没有可点的祖先节点");
+
+    // 下钻一层
+    await js("document.querySelectorAll('#growth .grow')[0].click()");
+    await sleep(400);
+    const one = await crumb();
+    check(one !== rootCrumb, "点增长榜可以下钻到下一层", `${rootCrumb} -> ${one}`);
+    check((await upDisabled()) === false, "下钻后「上一层」按钮可点");
+    check((await links()) === 1, "下钻后面包屑出现 1 个可点的祖先节点");
+
+    // 上一层
+    await js("document.querySelector('#timeUp').click()");
+    await sleep(400);
+    check((await crumb()) === rootCrumb, "点「上一层」能回到根目录", await crumb());
+    check((await upDisabled()) === true, "回到根目录后按钮重新禁用");
+
+    // 下钻两层, 再点面包屑第一段直接跳回根
+    await js("document.querySelectorAll('#growth .grow')[0].click()");
+    await sleep(350);
+    await js("document.querySelectorAll('#growth .grow')[0].click()");
+    await sleep(350);
+    const two = await crumb();
+    check((await links()) === 2, "下钻两层后面包屑有 2 个可点祖先节点", two);
+    await js("document.querySelectorAll('#timeCrumb .crumblink')[0].click()");
+    await sleep(400);
+    check((await crumb()) === rootCrumb, "点面包屑第一段可直接跳回根目录", await crumb());
+
+    // 图例与柱体也能下钻
+    await js("document.querySelectorAll('#growth .grow')[0].click()");
+    await sleep(350);
+    const beforeLeg = await crumb();
+    await js("document.querySelectorAll('#chartLegend .legenditem')[0].click()");
+    await sleep(400);
+    check((await crumb()) !== beforeLeg, "点图例可以下钻", `${beforeLeg} -> ${await crumb()}`);
+  }
   await shot(win, "02-时间轴");
 
   // --- 清理页 + 底栏策略 ---

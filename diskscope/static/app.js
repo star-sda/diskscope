@@ -8,7 +8,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const S = {
   result: null,
   tmNode: null, tmPath: [],
-  timeNode: null,
+  timeNode: null, timePath: [],
   junk: [], big: [], exts: [], all: [], extFilter: null,
   sel: new Set(),
   jobId: null, timer: null,
@@ -158,8 +158,8 @@ function finish() {
 }
 
 function renderAll() {
-  S.tmNode = S.result.root; S.tmPath = [S.result.root.name];
-  S.timeNode = S.result.root;
+  S.tmNode = S.result.root; S.tmPath = initPath(S.result.root);
+  S.timeNode = S.result.root; S.timePath = initPath(S.result.root);
   S.junk = S.result.junk || [];
   S.big = S.result.bigfiles || [];
   S.exts = S.result.extensions || [];
@@ -209,6 +209,32 @@ function topGrowth() {
     }
   })(S.result.root);
   return best && best.v ? `${best.n.name} (${fmt(best.v)})` : '无';
+}
+
+/* ---------------- \u8def\u5f84\u6808 (\u9762\u5305\u5c51 / \u4e0a\u4e0b\u94bb) ----------------
+   \u4e24\u4e2a\u9875\u7b7e(\u4f53\u79ef\u5206\u5e03 / \u65f6\u95f4\u8f74)\u90fd\u7528\u540c\u4e00\u5957\u8def\u5f84\u6808:
+   \u5e95\u5c42\u7684\u8def\u5f84\u5728\u524d, \u70b9\u9762\u5305\u5c51\u7684\u4efb\u610f\u4e00\u6bb5\u90fd\u80fd\u76f4\u63a5\u8df3\u8fc7\u53bb\u3002 */
+function initPath(root) { return [{ name: root.name, path: root.path }]; }
+function pushPath(stack, node) { stack.push({ name: node.name, path: node.path }); }
+function popPath(stack, root) {
+  if (stack.length > 1) stack.pop();
+  return findNode(root, stack[stack.length - 1].path) || root;
+}
+function crumbHtml(stack) {
+  return stack.map((seg, i) => {
+    const last = i === stack.length - 1;
+    return last
+      ? `<b>${esc(seg.name)}</b>`
+      : `<a class="crumblink" data-path="${esc(seg.path)}" href="#">${esc(seg.name)}</a>`;
+  }).join(' <span class="sepc">&rsaquo;</span> ');
+}
+/** \u9762\u5305\u5c51\u91cc\u7684\u7956\u5148\u8282\u70b9\u53ef\u70b9\u3002onPick \u8d1f\u8d23\u5207\u6362\u72b6\u6001\u3002 */
+function bindCrumb(sel, onPick) {
+  $$(sel + ' .crumblink').forEach(el => el.onclick = (ev) => {
+    ev.preventDefault();
+    const nd = findNode(S.result.root, el.dataset.path);
+    if (nd) onPick(nd, el.dataset.path);
+  });
 }
 
 /* ---------------- squarified treemap ---------------- */
@@ -262,8 +288,13 @@ const LVLC = { safe: '#2f9e6b', caution: '#b5822a', never: '#b8434f' };
 
 function renderTreemap() {
   const box = $('#treemap'), node = S.tmNode;
-  $('#crumb').innerHTML = S.tmPath.map((p, i) =>
-    i === S.tmPath.length - 1 ? `<b>${esc(p)}</b>` : esc(p)).join(' <span style="color:#4a5468">›</span> ');
+  $('#crumb').innerHTML = crumbHtml(S.tmPath);
+  bindCrumb('#crumb', (nd, path) => {
+    S.tmNode = nd;
+    const i = S.tmPath.findIndex(s => s.path === path);
+    if (i >= 0) S.tmPath.length = i + 1;
+    renderTreemap();
+  });
   if (!node || !(node.children || []).length) {
     box.innerHTML = `<div class="placeholder">${node ? '这个目录下面没有子目录' : '还没有数据'}</div>`;
     return;
@@ -297,7 +328,7 @@ function renderTreemap() {
   $$('#treemap .tm').forEach(el => el.onclick = () => {
     const p = el.dataset.path;
     const nd = findNode(S.result.root, p);
-    if (nd) { S.tmNode = nd; S.tmPath.push(nd.name); renderTreemap(); }
+    if (nd) { S.tmNode = nd; pushPath(S.tmPath, nd); renderTreemap(); }
   });
 }
 function esc(s) {
@@ -349,7 +380,14 @@ const PALETTE = ['#4f8cff', '#3ecf8e', '#f0b429', '#f0576a', '#a06bff', '#2fc4c4
 
 function renderTime() {
   const node = S.timeNode, days = +$('#timeRange').value;
-  $('#timeCrumb').innerHTML = esc(node.name) + ` <span style="color:#4a5468">›</span> 子目录每天写入量`;
+  $('#timeCrumb').innerHTML = crumbHtml(S.timePath);
+  bindCrumb('#timeCrumb', (nd, path) => {
+    S.timeNode = nd;
+    const i = S.timePath.findIndex(s => s.path === path);
+    if (i >= 0) S.timePath.length = i + 1;
+    renderTime(); renderGrowth();
+  });
+  $('#timeUp').disabled = S.timePath.length <= 1;
   const box = $('#chart');
   let kids = (node.children || []).filter(c => c.total > 0)
     .sort((a, b) => sum(b.daily, days) - sum(a.daily, days));
@@ -360,7 +398,7 @@ function renderTime() {
   }
   const TOP = 9;
   const series = act.slice(0, TOP).map((c, i) => ({
-    name: c.name, color: PALETTE[i % PALETTE.length], daily: c.daily,
+    name: c.name, path: c.path, color: PALETTE[i % PALETTE.length], daily: c.daily,
   }));
   const restTot = act.slice(TOP).reduce((s, c) => {
     const d = new Array(days).fill(0);
@@ -396,7 +434,7 @@ function renderTime() {
       acc += h;
       const y = mt + ih - acc;
       svg += `<rect x="${x + 1}" y="${y}" width="${Math.max(1, bw - 2)}" height="${h}"
-        fill="${se.color}" opacity=".92" data-d="${d}" data-n="${esc(se.name)}" data-v="${v}"><title>${esc(se.name)} · ${ago((Date.now() / 1000) - d * 86400)}\n${fmt(v)}</title></rect>`;
+        fill="${se.color}" opacity=".92" data-d="${d}" data-n="${esc(se.name)}" data-p="${esc(se.path)}" data-v="${v}"><title>${esc(se.name)} · ${ago((Date.now() / 1000) - d * 86400)}\n${fmt(v)}</title></rect>`;
     }
     if (d % Math.ceil(days / 7) === 0 || d === days - 1)
       svg += `<text class="glabel" x="${x + bw / 2}" y="${H - 10}" text-anchor="middle">${
@@ -406,9 +444,18 @@ function renderTime() {
   box.innerHTML = svg;
 
   $('#chartLegend').innerHTML = series.map(s =>
-    `<span><i class="sw" style="background:${s.color}"></i>${esc(s.name)} · ${fmt(sum(s.daily, days))}</span>`).join('');
+    `<span class="legenditem" data-path="${esc(s.path)}" title="点此可下钻到该目录"><i class="sw" style="background:${s.color}"></i>${esc(s.name)} · ${fmt(sum(s.daily, days))}</span>`).join('');
+  $$('#chartLegend .legenditem').forEach(el => el.onclick = () => {
+    const nd = findNode(S.result.root, el.dataset.path);
+    if (nd) { S.timeNode = nd; pushPath(S.timePath, nd); renderTime(); renderGrowth(); }
+  });
 
   $$('#chart rect').forEach(r => {
+    r.style.cursor = 'pointer';
+    r.onclick = () => {
+      const nd = findNode(S.result.root, r.dataset.p);
+      if (nd) { S.timeNode = nd; pushPath(S.timePath, nd); renderTime(); renderGrowth(); }
+    };
     r.onmouseenter = () => {
       const b = r.getBoundingClientRect();
       const t = document.createElement('div');
@@ -444,7 +491,7 @@ function renderGrowth() {
     </div>`).join('');
   $$('#growth .grow').forEach(el => el.onclick = () => {
     const nd = findNode(S.result.root, el.dataset.path);
-    if (nd) { S.timeNode = nd; renderTime(); renderGrowth(); }
+    if (nd) { S.timeNode = nd; pushPath(S.timePath, nd); renderTime(); renderGrowth(); }
   });
 }
 
@@ -740,7 +787,8 @@ $('#browseUp').onclick = async () => {
 $('#browseCancel').onclick = () => modal('#browseModal', false);
 $('#browseOk').onclick = () => { $('#path').value = browseCur; modal('#browseModal', false); doScan(); };
 $('#tmUp').onclick = () => {
-  if (S.tmPath.length > 1) { S.tmPath.pop(); S.tmNode = findNode(S.result.root, S.tmNode.path.replace(/\\[^\\]*$/, '') || S.result.root.path) || S.result.root; renderTreemap(); }
+  S.tmNode = popPath(S.tmPath, S.result.root);
+  renderTreemap();
 };
 $$('.tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 $('#gotoClean').onclick = () => {
@@ -751,6 +799,10 @@ $('#gotoClean').onclick = () => {
 };
 $('#showCold').onchange = renderTree;
 $('#timeRange').onchange = renderTime;
+$('#timeUp').onclick = () => {
+  S.timeNode = popPath(S.timePath, S.result.root);
+  renderTime(); renderGrowth();
+};
 $('#onlySafe').onchange = renderJunk;
 $('#onlyCold').onchange = renderJunk;
 $('#junkSearch').oninput = renderJunk;

@@ -235,3 +235,12 @@ table.junk tr.locked{opacity:.55}
 .cleanbar.slim #previewBtn,
 .cleanbar.slim #doClean{display:none}
 .cleanbar.slim #selNote{display:none}
+
+/* ---------- 面包屑 (可点) / 图例可点 ---------- */
+.crumblink{color:var(--acc);text-decoration:none;cursor:pointer}
+.crumblink:hover{text-decoration:underline}
+.sepc{color:#4a5468;margin:0 2px}
+.legenditem{cursor:pointer}
+.legenditem:hover{color:var(--acc)}
+button:disabled{opacity:.4;cursor:default}
+button:disabled:hover{background:none;border-color:var(--bd2)}

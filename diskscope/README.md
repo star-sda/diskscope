@@ -59,6 +59,14 @@ squarified treemap 点方块下钻, 配可展开的层级明细。
 ### 时间轴
 最近 30 天每天写入量 (堆叠柱状图) + "谁在悄悄长大"排行榜。
 
+可以下钻到任意层级, 并且永远能回得来:
+- 点增长榜的任意一行 → 下钻到该目录
+- 点图例或柱体 → 下钻到对应子目录
+- 面包屑的任意一段 → 直接跳到那一层
+- 「上一层」按钮 → 回到父目录 (在根目录时自动禁用)
+
+体积分布页的面包屑同样可点, 两页共用同一套路径栈管理。
+
 这是本工具的核心。`target/`、`node_modules/` 会安静地长到几十 GB, 而总览图上只体现为
 "一个大方块" —— 时间轴能直接告诉你它**什么时候**开始长的。
 
@@ -148,7 +156,7 @@ Electron 会把"路径最后一个扩展名是 asar 的文件"当成 asar 包来
 | 命令 | 覆盖 |
 |---|---|
 | `npm run selftest` | 40 项: MinHeap / 规则 / 扫描聚合 / 垃圾识别 / 时间轴不变量 / 排除 / 大文件 / 扩展名守恒 / dry-run / 删除闸门 / **真实回收站往返** |
-| `npm run uitest` | 20 项: preload 注入 / IPC / 扫描全流程 / treemap 下钻 / 时间轴 / 底栏策略 / 大文件筛选 / dry-run 弹窗 / **渲染进程零报错**, 并自动截图 |
+| `npm run uitest` | 37 项: preload 注入 / IPC / 扫描全流程 / treemap 下钻 / 时间轴下钻与返回 / 底栏策略 / 大文件筛选 / dry-run 弹窗 / **取消按钮** / **渲染进程零报错**, 并自动截图 |
 | `python selftest.py` | Python 版同样的 40 项 |
 | `npm run check:rules` | 27 项规则行为校验 |
 | `npm run bench -- <dir>` | 扫描速度实测 (文件/秒, 线程数) |
@@ -160,8 +168,21 @@ Electron 会把"路径最后一个扩展名是 asar 的文件"当成 asar 包来
 ## 打包
 
 ```
-npx electron-builder --win --x64
+npm run build
 ```
+
+等价于 `electron-builder --win --x64 && node tools/postbuild.js`, 但不能直接只跑 electron-builder ——
+**构建后处理是必要的** (两个原因):
+
+1. **electron-builder 自己的图标步骤不稳。**
+   它上手就是写完那个 180 MB 的 exe 立刻去改它, 经常因为文件被占用而失败
+   ("Unable to commit changes"), 且一失败就把整个构建拉坏。
+   我们改用 `signAndEditExecutable: false` 让它跳过这一步, 自己主动做 —— 等一下再改, 并自己重试 8 次。
+
+2. **绝不能对 NSIS 安装程序跑 rcedit。**
+   它们的压缩载荷是作为 PE **overlay** 追加在文件尾部的, rcedit 重写 PE 资源时会把那块 overlay 丢掉 ——
+   结果是 78 MB 的安装程序被剪成 60 KB 空壳。
+   它们的图标和版本信息由 electron-builder 的 NSIS 步骤负责, 不用我们关心。
 
 产物在 `dist/`。`asar` 打包后应用代码只有 110 KB, 78 MB 几乎全是 Electron 运行时 ——
 这是 Electron 的固有成本。如果哪天嫌大, C# + WebView2 能压到几 MB, 代价是后端要重写。

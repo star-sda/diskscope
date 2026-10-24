@@ -9,7 +9,9 @@
     "uitest": "electron . --uitest",
     "check:rules": "node tools/check_rules.js",
     "gen:rules": "python tools/gen_rules.py",
-    "bench": "electron . --bench"
+    "bench": "electron . --bench",
+    "build": "electron-builder --win --x64 && node tools/postbuild.js",
+    "dist": "npm run build"
   },
   "devDependencies": {
     "electron": "^33.0.0",
@@ -46,7 +48,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
