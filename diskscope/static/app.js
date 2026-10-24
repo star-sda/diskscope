@@ -579,10 +579,15 @@ function renderBig() {
       <td class="c1"><input type="checkbox" ${on ? 'checked' : ''} data-key="${esc(f.key)}"></td>
       <td class="num" style="font-family:var(--mono)">${fmt(f.size)}</td>
       <td><span class="tg caution" style="background:rgba(240,180,41,.18);color:#f0b429">${esc(f.ext)}</span></td>
-      <td><div class="jpath">${esc(f.sample[0])}</div></td>
+      <td><div class="jpath jpath-link" data-reveal="${esc(f.sample[0])}"
+        title="点击在资源管理器中定位">${esc(f.sample[0])}</div></td>
       <td class="num" style="color:#606a80">${ago(f.mtime)}</td>
     </tr>`;
   }).join('');
+  $$('#bigBody .jpath-link').forEach(el => el.onclick = (ev) => {
+    ev.stopPropagation();
+    revealPath(el.dataset.reveal);
+  });
   $$('#bigBody input[type=checkbox]').forEach(cb => cb.onclick = ev => {
     ev.stopPropagation();
     cb.checked ? S.sel.add(cb.dataset.key) : S.sel.delete(cb.dataset.key);
@@ -596,6 +601,13 @@ function renderBig() {
     vis.forEach(k => e.target.checked ? S.sel.add(k) : S.sel.delete(k));
     renderBig(); updateSelBar();
   };
+}
+
+/* ---------------- 在资源管理器中定位 ----------------
+   清理页 / 大文件页都显示了文件位置, 能点就应该能直接打开它。 */
+function revealPath(p) {
+  if (!p) return;
+  api('/api/reveal', { path: p }).catch(() => toast('无法打开资源管理器', 'bad'));
 }
 
 /* ---------------- 清理 ---------------- */
@@ -622,13 +634,18 @@ function renderJunk() {
       <td><span class="tg ${j.level}">${j.level === 'safe' ? '可重建' : j.level === 'caution' ? '需确认' : '勿删'}</span>
         <div style="margin-top:3px;color:#9aa4b8">${esc(j.label)}</div></td>
       <td class="num" style="font-family:var(--mono)">${fmt(j.size)}</td>
-      <td><div class="jpath">${esc(p)}</div>
+      <td><div class="jpath jpath-link" data-reveal="${esc(p)}"
+        title="点击在资源管理器中定位">${esc(p)}</div>
         ${j.count > 1 ? `<div style="color:#606a80;font-size:11px">共 ${j.count} 个文件</div>` : ''}</td>
       <td><div class="jwhy">${esc(j.why)}</div></td>
       <td class="num" style="color:#606a80">${ago(j.mtime)}</td>
     </tr>`;
   }).join('');
 
+  $$('#junkBody .jpath-link').forEach(el => el.onclick = (ev) => {
+    ev.stopPropagation();
+    revealPath(el.dataset.reveal);
+  });
   $$('#junkBody input[type=checkbox]').forEach(cb => cb.onclick = ev => {
     ev.stopPropagation();
     cb.checked ? S.sel.add(cb.dataset.key) : S.sel.delete(cb.dataset.key);

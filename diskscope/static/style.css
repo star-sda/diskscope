@@ -244,3 +244,7 @@ table.junk tr.locked{opacity:.55}
 .legenditem:hover{color:var(--acc)}
 button:disabled{opacity:.4;cursor:default}
 button:disabled:hover{background:none;border-color:var(--bd2)}
+
+/* ---------- 路径可点 (点一下在资源管理器里定位) ---------- */
+.jpath-link{cursor:pointer;transition:color .12s}
+.jpath-link:hover{color:var(--acc);text-decoration:underline}

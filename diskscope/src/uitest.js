@@ -288,6 +288,31 @@ async function runUiTest(createWindow) {
   const filtered = await js("document.querySelectorAll('#bigBody tr:not(:has(.placeholder))').length");
   check(filtered > 0 && filtered < bigRows, "点扩展名后清单被筛选", `${bigRows} -> ${filtered}`);
 
+  // --- 路径可点: 点一下应该在资源管理器里定位 ---
+  console.log("\n[6.5] 路径定位");
+  {
+    // 自动化测试里不能真开资源管理器, 用桩函数接住
+    await js("window.__revealed = []; window.revealPath = (p) => { window.__revealed.push(p); };");
+
+    const links = await js("document.querySelectorAll('#bigBody .jpath-link').length");
+    check(links > 0, "大文件页的路径是可点的", `${links} 个`);
+    const attr = await js("(document.querySelector('#bigBody .jpath-link')||{}).dataset ? document.querySelector('#bigBody .jpath-link').dataset.reveal : ''");
+    check(!!attr, "路径上带了 data-reveal 属性", attr.slice(-46));
+    await js("document.querySelector('#bigBody .jpath-link').click()");
+    await sleep(250);
+    const got = await js("(window.__revealed||[])[0] || ''");
+    check(got === attr, "点路径会调用定位 (Explorer 打开并选中该项)", got.slice(-46));
+
+    await js("document.querySelector('.tabs button[data-tab=\"clean\"]').click()");
+    await sleep(400);
+    const links2 = await js("document.querySelectorAll('#junkBody .jpath-link').length");
+    check(links2 > 0, "清理页的路径是可点的", `${links2} 个`);
+    await js("document.querySelector('#junkBody .jpath-link').click()");
+    await sleep(250);
+    const got2 = await js("(window.__revealed||[])[1] || ''");
+    check(!!got2, "清理页点路径也会调用定位", got2.slice(-46));
+  }
+
   // --- dry-run 预演 ---
   console.log("\n[7] dry-run 预演");
   await js("document.querySelector('.tabs button[data-tab=\"clean\"]').click()");

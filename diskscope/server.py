@@ -12,6 +12,7 @@ import mimetypes
 import os
 import secrets
 import string
+import subprocess
 import sys
 import threading
 import time
@@ -246,6 +247,24 @@ class Handler(BaseHTTPRequestHandler):
                 job = JOBS.get(jid)
             if job:
                 job["cancel"].set()
+            return self._send(200, {"ok": True})
+
+        if path == "/api/reveal":
+            # 在资源管理器中定位: 打开所在目录并选中该项
+            target = (b.get("path") or "").strip().strip('"')
+            if target and os.path.exists(target):
+                try:
+                    if os.name == "nt":
+                        # explorer 的 /select,后面必须带引号, 且要用字符串形式传入
+                        # (列表形式的引号会被 Python 再转义一次, 导致 explorer 解析失败;
+                        #  带空格的路径必须用字符串形式才能正确定位)
+                        # shell=False: 不经 cmd, 路径里的 ; & 等字符不会被当命令分隔符
+                        safe = target.replace('"', "")
+                        subprocess.Popen('explorer /select,"%s"' % safe)
+                    else:
+                        subprocess.Popen(["xdg-open", os.path.dirname(target) or target])
+                except Exception:
+                    pass
             return self._send(200, {"ok": True})
 
         if path == "/api/clean/dryrun":
