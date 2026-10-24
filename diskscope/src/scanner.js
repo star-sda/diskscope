@@ -250,7 +250,9 @@ class Scanner {
 
     for (const fn of fileNames) {
       if (this._stopped()) break;
-      const full = dirPath + "\\" + fn;
+      // 用 path.join 而不是字符串相加: 根目录 "D:\" 本身就带尾随分隔符,
+      // 直接拼会得到 "D:\\software" 这种双反斜杠的路径
+      const full = path.join(dirPath, fn);
       let st;
       try { st = statFile(full); } catch { agg.errors++; continue; }
       sizes.set(fn, st.size);
@@ -282,7 +284,7 @@ class Scanner {
         const e = {
           rule: r.id, label: r.label, why: r.why || "", level: r.level,
           kind: "files", dir: dirPath, count: hits.length, size: tot,
-          sample: shown.slice(0, 20).map((h) => dirPath + "\\" + h),
+          sample: shown.slice(0, 20).map((h) => path.join(dirPath, h)),
         };
         if (hits.length > shown.length) e.pathsTruncated = true;
         node.junk.push(e);

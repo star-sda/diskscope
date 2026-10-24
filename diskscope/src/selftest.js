@@ -185,6 +185,14 @@ async function runSelftest() {
     check(eb === stats.bytes, "\u5404\u6269\u5c55\u540d\u5b57\u8282\u603b\u548c == \u5168\u90e8\u5b57\u8282\u6570");
     check(exts.every((e, i) => i === 0 || exts[i - 1].bytes >= e.bytes), "\u6309\u5360\u7528\u4ece\u5927\u5230\u5c0f\u6392\u5e8f");
     check(exts.some((e) => e.ext === ".log"), "\u6269\u5c55\u540d\u6c47\u603b\u5305\u542b .log");
+
+    // \u8def\u5f84\u4e0d\u5f97\u51fa\u73b0\u53cc\u53cd\u53cd\u659c\u6760 (\u76ee\u5f55\u540d\u4e0e\u76f8\u90bb\u76ee\u5f55\u4e4b\u95f4\u591a\u4e86\u4e00\u4e2a \\ )
+    const allPaths = []
+      .concat(res.bigfiles.map((b) => b.sample[0]))
+      .concat(res.junk.map((j) => j.sample[0] || j.dir))
+      .concat([res.root.path]);
+    const doubled = allPaths.filter((x) => /\\\\/.test(x));
+    check(doubled.length === 0, "\u8def\u5f84\u91cc\u6ca1\u6709\u53cc\u53cd\u53cd\u659c\u6760", doubled.slice(0, 2).join(" | "));
   }
 
   // ---------------- 8. 取消 (关键回归) ----------------

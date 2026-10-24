@@ -100,7 +100,7 @@ class ScanPool {
     // 子目录继续派活
     const childDepth = task ? task.depth + 1 : 1;
     for (const sub of m.subs) {
-      const full = m.dir + "\\" + sub;
+      const full = path.join(m.dir, sub);   // path.join 会归一化分隔符
       if (childDepth >= this.maxDepth) {
         // 触达深度上限: 建占位节点, 大小不计入
         const stub = makeNode(full, sub);
