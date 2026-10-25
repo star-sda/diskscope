@@ -220,12 +220,14 @@ tools/
 server.py / scanner.py / trash.py / selftest.py / run.bat   Python 版
 ```
 
-## 效果展示
-
+```
+# 效果展示
+```
+```
 <img width="1264" height="841" alt="image" src="https://github.com/user-attachments/assets/befae81c-7a9b-4ad3-a5ba-be8b19028d0b" />
 <img width="1264" height="841" alt="image" src="https://github.com/user-attachments/assets/7f0ce01a-6742-413d-b9c5-88ea7894e4f8" />
 <img width="1264" height="841" alt="image" src="https://github.com/user-attachments/assets/e7a9f231-6871-4870-9c9b-4fe8adcc5963" />
 <img width="1264" height="841" alt="image" src="https://github.com/user-attachments/assets/a8e8b0fb-4f4e-44f4-a076-ecab610e2c9d" />
-
+```
 
 
